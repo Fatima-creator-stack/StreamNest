@@ -1,10 +1,13 @@
 class MovieWebsite {
     constructor() {
-        this.movies = JSON.parse(localStorage.getItem('movies')) || [];
+        // Try to load from regular storage first, then chunks
+        this.movies = JSON.parse(localStorage.getItem('movies')) || this.loadMoviesFromChunks() || [];
         this.currentPage = 1;
         this.moviesPerPage = 20;
         this.filteredMovies = [...this.movies];
         this.searchTimeout = null;
+        this.adminMoviesPerPage = 10; // Pagination for admin panel
+        this.adminCurrentPage = 1;
 
         this.init();
     }
@@ -14,9 +17,16 @@ class MovieWebsite {
         this.displayMovies();
         this.setupPagination();
         this.updateAdminButton();
+
+        // Create directories if they don't exist (simulated)
+        if (!localStorage.getItem('moviesInitialized')) {
+            this.initializeDefaultMovies();
+            localStorage.setItem('moviesInitialized', 'true');
+        }
     }
 
     setupEventListeners() {
+        // Search functionality
         const searchInput = document.getElementById('searchInput');
         const searchBtn = document.getElementById('searchBtn');
 
@@ -31,11 +41,12 @@ class MovieWebsite {
             this.searchMovies(searchInput.value);
         });
 
+        // Input method toggle for admin form
         document.addEventListener('change', (e) => {
             if (e.target.name === 'inputMethod') {
                 const urlInputs = document.getElementById('urlInputs');
                 const fileInputs = document.getElementById('fileInputs');
-                
+
                 if (e.target.value === 'url') {
                     urlInputs.style.display = 'block';
                     fileInputs.style.display = 'none';
@@ -46,11 +57,12 @@ class MovieWebsite {
             }
         });
 
+        // Modal event listeners
         const adminBtn = document.getElementById('adminBtn');
         const adminModal = document.getElementById('adminModal');
         const loginModal = document.getElementById('loginModal');
-        const closeBtn = document.querySelector('.close');
-        const loginCloseBtn = document.querySelector('.login-close');
+        const closeBtn = document.querySelector('#adminModal .close');
+        const loginCloseBtn = document.querySelector('#loginModal .close');
         const adminForm = document.getElementById('adminForm');
         const loginForm = document.getElementById('loginForm');
 
@@ -86,6 +98,46 @@ class MovieWebsite {
         });
     }
 
+    handleLogin() {
+        const password = document.getElementById('adminPassword').value;
+        const correctPassword = 'tahahaya786'; // Change this to your desired password
+
+        if (password === correctPassword) {
+            localStorage.setItem('adminLoggedIn', 'true');
+            localStorage.setItem('adminLoginTime', Date.now().toString());
+            document.getElementById('loginModal').style.display = 'none';
+            document.getElementById('adminModal').style.display = 'block';
+            this.displayAdminMovies();
+            this.updateAdminButton();
+        } else {
+            alert('Incorrect password!');
+        }
+    }
+
+    isAdminLoggedIn() {
+        const isLoggedIn = localStorage.getItem('adminLoggedIn');
+        const loginTime = localStorage.getItem('adminLoginTime');
+
+        if (!isLoggedIn || !loginTime) return false;
+
+        // Session expires after 1 hour (3600000 ms)
+        const sessionDuration = 3600000;
+        const currentTime = Date.now();
+
+        if (currentTime - parseInt(loginTime) > sessionDuration) {
+            this.logout();
+            return false;
+        }
+
+        return isLoggedIn === 'true';
+    }
+
+    logout() {
+        localStorage.removeItem('adminLoggedIn');
+        localStorage.removeItem('adminLoginTime');
+        this.updateAdminButton();
+    }
+
     searchMovies(query) {
         const searchTerm = query.toLowerCase().trim();
 
@@ -106,21 +158,21 @@ class MovieWebsite {
     displayMovies() {
         const movieGrid = document.getElementById('movieGrid');
         const loading = document.getElementById('loading');
-        
+
         loading.style.display = 'block';
 
         setTimeout(() => {
             const startIndex = (this.currentPage - 1) * this.moviesPerPage;
             const endIndex = startIndex + this.moviesPerPage;
             const moviesToShow = this.filteredMovies.slice(startIndex, endIndex);
-            
+
             movieGrid.innerHTML = '';
 
             if (moviesToShow.length === 0) {
                 movieGrid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; font-size: 1.2rem; color: rgba(255,255,255,0.7);">No movies found matching your search.</p>';
             } else {
-                moviesToShow.forEach(movie => {
-                    const movieCard = this.createMovieCard(movie);
+                moviesToShow.forEach((movie, index) => {
+                    const movieCard = this.createMovieCard(movie, index);
                     movieGrid.appendChild(movieCard);
                 });
             }
@@ -129,10 +181,11 @@ class MovieWebsite {
         }, 300);
     }
 
-    createMovieCard(movie) {
+    createMovieCard(movie, index) {
         const card = document.createElement('div');
         card.className = 'movie-card';
         card.setAttribute('data-movie-id', movie.id);
+        card.style.animationDelay = `${index * 0.1}s`;
 
         card.innerHTML = `
             <img src="${movie.bannerUrl}" alt="${movie.title}" class="movie-poster" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQ1MCIgdmlld0JveD0iMCAwIDMwMCA0NTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiBmaWxsPSIjMUExQTFBIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMjI1IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiNGRkZGRkYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPk5vIEltYWdlPC90ZXh0Pgo8L3N2Zz4K'" crossorigin="anonymous">
@@ -149,78 +202,548 @@ class MovieWebsite {
         return card;
     }
 
-    addMovie() {
-        const titleInput = document.getElementById('movieTitle');
-        const descriptionInput = document.getElementById('movieDescription');
-        const inputMethod = document.querySelector('input[name="inputMethod"]:checked').value;
+    downloadMovie(movie) {
+        // Get click count for this specific movie
+        const movieClickKey = `clickCount_${movie.id}`;
+        let clickCount = parseInt(localStorage.getItem(movieClickKey) || '0');
 
-        const title = titleInput.value.trim();
-        const description = descriptionInput.value.trim();
+        // Increment click count
+        clickCount++;
+        localStorage.setItem(movieClickKey, clickCount.toString());
+
+        // Check if user needs to view ads first
+        if (clickCount <= 5) {
+            // Show ad redirection message
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(45deg, #ff6b35, #ff8c42);
+                color: white;
+                padding: 15px 20px;
+                border-radius: 10px;
+                z-index: 10000;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                font-weight: bold;
+                text-align: center;
+                max-width: 300px;
+            `;
+
+            const remaining = 5 - clickCount + 1;
+            notification.innerHTML = `
+                <div style="margin-bottom: 8px;">Please view ad to continue</div>
+                <div style="font-size: 0.9em; opacity: 0.9;">${remaining} more ${remaining === 1 ? 'click' : 'clicks'} until download</div>
+            `;
+
+            document.body.appendChild(notification);
+
+            // Remove notification after 4 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 4000);
+
+            // Redirect to ad page
+            window.open('https://otieu.com/4/9421362', '_blank');
+
+        } else {
+            // User has completed ad views, provide actual download
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(45deg, #28a745, #20c997);
+                color: white;
+                padding: 15px 20px;
+                border-radius: 10px;
+                z-index: 10000;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                font-weight: bold;
+            `;
+            notification.textContent = `Starting download: ${movie.title}`;
+            document.body.appendChild(notification);
+
+            // Remove notification after 3 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 3000);
+
+            // Trigger actual download
+            if (movie.downloadUrl && movie.downloadUrl !== '#') {
+                // Create a temporary link and click it to start download
+                const link = document.createElement('a');
+                link.href = movie.downloadUrl;
+                link.download = `${movie.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
+                link.target = '_blank';
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // Reset click count after successful download
+                localStorage.removeItem(movieClickKey);
+
+            } else {
+                // Fallback for movies without download URLs
+                setTimeout(() => {
+                    alert(`Download URL not available for "${movie.title}". Please contact admin to add download link.`);
+                }, 500);
+            }
+        }
+    }
+
+    setupPagination() {
+        const pagination = document.getElementById('pagination');
+        const totalPages = Math.ceil(this.filteredMovies.length / this.moviesPerPage);
+
+        pagination.innerHTML = '';
+
+        if (totalPages <= 1) return;
+
+        // Previous button
+        if (this.currentPage > 1) {
+            const prevBtn = this.createPageButton('‹', this.currentPage - 1);
+            pagination.appendChild(prevBtn);
+        }
+
+        // Page numbers
+        const startPage = Math.max(1, this.currentPage - 2);
+        const endPage = Math.min(totalPages, this.currentPage + 2);
+
+        if (startPage > 1) {
+            pagination.appendChild(this.createPageButton(1, 1));
+            if (startPage > 2) {
+                const ellipsis = document.createElement('span');
+                ellipsis.textContent = '...';
+                ellipsis.className = 'page-btn';
+                pagination.appendChild(ellipsis);
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const pageBtn = this.createPageButton(i, i);
+            if (i === this.currentPage) {
+                pageBtn.classList.add('active');
+            }
+            pagination.appendChild(pageBtn);
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                const ellipsis = document.createElement('span');
+                ellipsis.textContent = '...';
+                ellipsis.className = 'page-btn';
+                pagination.appendChild(ellipsis);
+            }
+            pagination.appendChild(this.createPageButton(totalPages, totalPages));
+        }
+
+        // Next button
+        if (this.currentPage < totalPages) {
+            const nextBtn = this.createPageButton('›', this.currentPage + 1);
+            pagination.appendChild(nextBtn);
+        }
+    }
+
+    createPageButton(text, page) {
+        const btn = document.createElement('button');
+        btn.textContent = text;
+        btn.className = 'page-btn';
+        btn.addEventListener('click', () => {
+            this.currentPage = page;
+            this.displayMovies();
+            this.setupPagination();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        return btn;
+    }
+
+    updateAdminButton() {
+        const adminBtn = document.getElementById('adminBtn');
+        if (this.isAdminLoggedIn()) {
+            adminBtn.textContent = 'Admin Panel (Logout)';
+            adminBtn.onclick = (e) => {
+                e.preventDefault();
+                if (confirm('Do you want to logout?')) {
+                    this.logout();
+                } else {
+                    document.getElementById('adminModal').style.display = 'block';
+                    this.displayAdminMovies();
+                }
+            };
+        } else {
+            adminBtn.textContent = 'Admin Panel';
+            adminBtn.onclick = null;
+        }
+    }
+
+    displayAdminMovies() {
+        const adminMovieList = document.getElementById('adminMovieList');
+        adminMovieList.innerHTML = '';
+
+        if (this.movies.length === 0) {
+            adminMovieList.innerHTML = '<p style="color: rgba(255,255,255,0.7);">No movies added yet.</p>';
+            return;
+        }
+
+        // Pagination for admin movies
+        const startIndex = (this.adminCurrentPage - 1) * this.adminMoviesPerPage;
+        const endIndex = startIndex + this.adminMoviesPerPage;
+        const moviesToShow = this.movies.slice(startIndex, endIndex);
+
+        moviesToShow.forEach(movie => {
+            const movieClickKey = `clickCount_${movie.id}`;
+            const clickCount = parseInt(localStorage.getItem(movieClickKey) || '0');
+            const remaining = Math.max(0, 5 - clickCount);
+
+            const movieItem = document.createElement('div');
+            movieItem.className = 'admin-movie-item';
+            movieItem.innerHTML = `
+                <div style="flex: 1;">
+                    <span style="font-weight: bold;">${movie.title}</span>
+                    <br>
+                    <small style="color: rgba(255,255,255,0.7);">
+                        ${remaining > 0 ? `${remaining} ad clicks remaining` : 'Ready for download'}
+                    </small>
+                </div>
+                <div>
+                    <button class="reset-btn" onclick="movieWebsite.resetMovieClicks(${movie.id})" style="margin-right: 5px;">Reset Clicks</button>
+                    <button class="delete-btn" onclick="movieWebsite.deleteMovie(${movie.id})">Delete</button>
+                </div>
+            `;
+            adminMovieList.appendChild(movieItem);
+        });
+
+        // Add pagination for admin panel if needed
+        if (this.movies.length > this.adminMoviesPerPage) {
+            this.setupAdminPagination();
+        }
+    }
+
+    setupAdminPagination() {
+        const adminMovieList = document.getElementById('adminMovieList');
+        const totalPages = Math.ceil(this.movies.length / this.adminMoviesPerPage);
+
+        if (totalPages <= 1) return;
+
+        const paginationDiv = document.createElement('div');
+        paginationDiv.className = 'admin-pagination';
+        paginationDiv.style.cssText = 'margin-top: 15px; text-align: center;';
+
+        // Previous button
+        if (this.adminCurrentPage > 1) {
+            const prevBtn = document.createElement('button');
+            prevBtn.textContent = '‹';
+            prevBtn.className = 'admin-page-btn';
+            prevBtn.style.cssText = 'margin: 0 5px; padding: 5px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 3px; cursor: pointer;';
+            prevBtn.onclick = () => {
+                this.adminCurrentPage--;
+                this.displayAdminMovies();
+            };
+            paginationDiv.appendChild(prevBtn);
+        }
+
+        // Page info
+        const pageInfo = document.createElement('span');
+        pageInfo.textContent = `Page ${this.adminCurrentPage} of ${totalPages}`;
+        pageInfo.style.cssText = 'color: rgba(255,255,255,0.8); margin: 0 10px;';
+        paginationDiv.appendChild(pageInfo);
+
+        // Next button
+        if (this.adminCurrentPage < totalPages) {
+            const nextBtn = document.createElement('button');
+            nextBtn.textContent = '›';
+            nextBtn.className = 'admin-page-btn';
+            nextBtn.style.cssText = 'margin: 0 5px; padding: 5px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 3px; cursor: pointer;';
+            nextBtn.onclick = () => {
+                this.adminCurrentPage++;
+                this.displayAdminMovies();
+            };
+            paginationDiv.appendChild(nextBtn);
+        }
+
+        adminMovieList.appendChild(paginationDiv);
+    }
+
+    resetMovieClicks(movieId) {
+        const movieClickKey = `clickCount_${movieId}`;
+        localStorage.removeItem(movieClickKey);
+        this.displayAdminMovies();
+
+        const movie = this.movies.find(m => m.id === movieId);
+        alert(`Click count reset for "${movie.title}". Users will need to view ads again.`);
+    }
+
+    deleteMovie(movieId) {
+        if (confirm('Are you sure you want to delete this movie?')) {
+            this.movies = this.movies.filter(movie => movie.id !== movieId);
+            this.filteredMovies = this.filteredMovies.filter(movie => movie.id !== movieId);
+            this.saveMovies();
+
+            // Adjust admin pagination if needed
+            const totalPages = Math.ceil(this.movies.length / this.adminMoviesPerPage);
+            if (this.adminCurrentPage > totalPages && totalPages > 0) {
+                this.adminCurrentPage = totalPages;
+            }
+
+            this.displayMovies();
+            this.setupPagination();
+            this.displayAdminMovies();
+        }
+    }
+
+    saveMovies() {
+        try {
+            // Compress and store movies data
+            const moviesData = JSON.stringify(this.movies);
+            localStorage.setItem('movies', moviesData);
+
+            // Store backup in chunks if data is large
+            if (moviesData.length > 5000000) { // 5MB threshold
+                this.saveMoviesInChunks(moviesData);
+            }
+        } catch (e) {
+            if (e.name === 'QuotaExceededError') {
+                // Try to save in chunks for unlimited storage capability
+                this.saveMoviesInChunks(JSON.stringify(this.movies));
+            }
+        }
+    }
+
+    saveMoviesInChunks(data) {
+        const chunkSize = 1000000; // 1MB chunks
+        const chunks = [];
+
+        for (let i = 0; i < data.length; i += chunkSize) {
+            chunks.push(data.slice(i, i + chunkSize));
+        }
+
+        try {
+            localStorage.setItem('movieChunks', chunks.length.toString());
+            chunks.forEach((chunk, index) => {
+                localStorage.setItem(`movieChunk_${index}`, chunk);
+            });
+        } catch (e) {
+            alert('Storage limit reached. Consider clearing old data or using external storage.');
+        }
+    }
+
+    loadMoviesFromChunks() {
+        const chunkCount = parseInt(localStorage.getItem('movieChunks') || '0');
+        if (chunkCount === 0) return null;
+
+        let data = '';
+        for (let i = 0; i < chunkCount; i++) {
+            data += localStorage.getItem(`movieChunk_${i}`) || '';
+        }
+
+        try {
+            return JSON.parse(data);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    createBackup() {
+        const backupData = {
+            movies: JSON.parse(JSON.stringify(this.movies)),
+            timestamp: new Date().toISOString(),
+            version: 1
+        };
+        localStorage.setItem('moviesBackup', JSON.stringify(backupData));
+        return backupData;
+    }
+
+    restoreFromBackup() {
+        const backupData = localStorage.getItem('moviesBackup');
+        if (backupData) {
+            try {
+                const backup = JSON.parse(backupData);
+                this.movies = backup.movies || [];
+                this.filteredMovies = [...this.movies];
+                this.saveMovies();
+                this.displayMovies();
+                this.setupPagination();
+                this.displayAdminMovies();
+                return true;
+            } catch (e) {
+                console.error('Failed to restore backup:', e);
+                return false;
+            }
+        }
+        return false;
+    }
+
+    showRestoreOption() {
+        const backupData = localStorage.getItem('moviesBackup');
+        if (backupData) {
+            try {
+                const backup = JSON.parse(backupData);
+                const backupTime = new Date(backup.timestamp).toLocaleString();
+                if (confirm(`A backup from ${backupTime} is available. Would you like to restore it?`)) {
+                    if (this.restoreFromBackup()) {
+                        alert('Data restored successfully from backup!');
+                    } else {
+                        alert('Failed to restore backup data.');
+                    }
+                }
+            } catch (e) {
+                console.error('Invalid backup data:', e);
+            }
+        }
+    }
+
+    addMovie() {
+        const title = document.getElementById('movieTitle').value.trim();
+        const description = document.getElementById('movieDescription').value.trim();
+        const inputMethod = document.querySelector('input[name="inputMethod"]:checked').value;
 
         if (!title) {
             alert('Please enter a movie title.');
             return;
         }
 
-        let bannerUrl, downloadUrl;
+        // Create backup before adding
+        this.createBackup();
+
+        let bannerUrl = '';
+        let downloadUrl = '';
 
         if (inputMethod === 'url') {
-            const bannerUrlInput = document.getElementById('bannerUrl');
-            const downloadUrlInput = document.getElementById('downloadUrl');
-
-            bannerUrl = bannerUrlInput.value.trim();
-            downloadUrl = downloadUrlInput.value.trim();
-
-            if (!bannerUrl || !downloadUrl) {
-                alert('Please enter both banner URL and download URL.');
-                return;
-            }
+            bannerUrl = document.getElementById('bannerUrl').value.trim();
+            downloadUrl = document.getElementById('downloadUrl').value.trim();
         } else {
-            const bannerInput = document.getElementById('movieBanner');
-            const movieInput = document.getElementById('movieFile');
+            // Handle file uploads (convert to data URLs for demo)
+            const bannerFile = document.getElementById('movieBanner').files[0];
+            const movieFile = document.getElementById('movieFile').files[0];
 
-            if (!bannerInput.files[0] || !movieInput.files[0]) {
-                alert('Please select both banner image and movie file.');
+            if (bannerFile) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    bannerUrl = e.target.result;
+                    this.processMovieAddition(title, description, bannerUrl, downloadUrl);
+                };
+                reader.readAsDataURL(bannerFile);
                 return;
             }
-
-            const bannerFile = bannerInput.files[0];
-            const movieFile = movieInput.files[0];
-            bannerUrl = URL.createObjectURL(bannerFile);
-            downloadUrl = URL.createObjectURL(movieFile);
         }
 
+        this.processMovieAddition(title, description, bannerUrl, downloadUrl);
+    }
+
+    processMovieAddition(title, description, bannerUrl, downloadUrl) {
         const newMovie = {
             id: Date.now(),
             title: title,
             description: description || 'No description available.',
-            bannerUrl: bannerUrl,
-            downloadUrl: downloadUrl,
+            bannerUrl: bannerUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQ1MCIgdmlld0JveD0iMCAwIDMwMCA0NTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiBmaWxsPSIjMUExQTFBIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMjI1IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiNGRkZGRkYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPk5vIEltYWdlPC90ZXh0Pgo8L3N2Zz4K',
+            downloadUrl: downloadUrl || '#',
             dateAdded: new Date().toISOString()
         };
 
-        this.movies.unshift(newMovie);
+        this.movies.push(newMovie);
         this.filteredMovies = [...this.movies];
         this.saveMovies();
-
-        document.getElementById('adminForm').reset();
-        document.querySelector('input[name="inputMethod"][value="url"]').checked = true;
-        document.getElementById('urlInputs').style.display = 'block';
-        document.getElementById('fileInputs').style.display = 'none';
-
         this.displayMovies();
         this.setupPagination();
         this.displayAdminMovies();
 
-        alert('Movie added successfully!');
+        // Reset form
+        document.getElementById('adminForm').reset();
+        document.getElementById('urlInputs').style.display = 'block';
+        document.getElementById('fileInputs').style.display = 'none';
+
+        // Show success message with undo option
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            z-index: 10000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            font-weight: bold;
+            max-width: 300px;
+        `;
+        notification.innerHTML = `
+            <div style="margin-bottom: 10px;">Movie "${title}" added successfully!</div>
+            <button onclick="movieWebsite.showRestoreOption(); this.parentNode.remove();" 
+                    style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px;">
+                Undo Last Change
+            </button>
+        `;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
     }
 
-    saveMovies() {
-        localStorage.setItem('movies', JSON.stringify(this.movies));
+    initializeDefaultMovies() {
+        // Add some sample movies for demonstration
+        const sampleMovies = [
+            {
+                id: 1,
+                title: "The Dark Knight",
+                description: "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham...",
+                bannerUrl: "https://picsum.photos/300/450?random=1",
+                downloadUrl: "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4",
+                dateAdded: new Date().toISOString()
+            },
+            {
+                id: 2,
+                title: "Inception",
+                description: "A thief who steals corporate secrets through dream-sharing technology...",
+                bannerUrl: "https://picsum.photos/300/450?random=2",
+                downloadUrl: "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_2mb.mp4",
+                dateAdded: new Date().toISOString()
+            },
+            {
+                id: 3,
+                title: "Interstellar",
+                description: "A team of explorers travel through a wormhole in space...",
+                bannerUrl: "https://picsum.photos/300/450?random=3",
+                downloadUrl: "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_5mb.mp4",
+                dateAdded: new Date().toISOString()
+            }
+        ];
+
+        this.movies = sampleMovies;
+        this.filteredMovies = [...this.movies];
+        this.saveMovies();
     }
 }
 
 // Initialize the website when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.movieWebsite = new MovieWebsite();
+});
+
+// Performance optimization: Lazy loading for images
+document.addEventListener('DOMContentLoaded', () => {
+    const imageObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const img = entry.target;
+                img.src = img.dataset.src;
+                img.classList.remove('lazy');
+                observer.unobserve(img);
+            }
+        });
+    });
+
+    // Observe all images with lazy class
+    document.querySelectorAll('img.lazy').forEach(img => {
+        imageObserver.observe(img);
+    });
 });
