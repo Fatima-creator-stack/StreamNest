@@ -163,8 +163,11 @@ class MovieWebsite {
 
         loading.style.display = 'block';
 
-        // Use requestAnimationFrame for smoother rendering
-        requestAnimationFrame(() => {
+        // Check if device is low-end (simple heuristic)
+        const isLowEndDevice = navigator.hardwareConcurrency <= 2 || 
+                              /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        const renderFunction = () => {
             const startIndex = (this.currentPage - 1) * this.moviesPerPage;
             const endIndex = startIndex + this.moviesPerPage;
             const moviesToShow = this.filteredMovies.slice(startIndex, endIndex);
@@ -190,14 +193,31 @@ class MovieWebsite {
 
             // Initialize lazy loading for new images
             this.initializeLazyLoading();
-        });
+        };
+
+        // Use immediate rendering for low-end devices, requestAnimationFrame for others
+        if (isLowEndDevice) {
+            renderFunction();
+        } else {
+            requestAnimationFrame(renderFunction);
+        }
     }
 
     createMovieCard(movie, index) {
         const card = document.createElement('div');
         card.className = 'movie-card';
         card.setAttribute('data-movie-id', movie.id);
-        card.style.animationDelay = `${Math.min(index * 0.05, 0.4)}s`; // Limit animation delay
+        // Reduce or disable animations on low-end devices
+        const isLowEndDevice = navigator.hardwareConcurrency <= 2 || 
+                              /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        if (!isLowEndDevice) {
+            card.style.animationDelay = `${Math.min(index * 0.05, 0.4)}s`;
+        } else {
+            card.style.animation = 'none';
+            card.style.opacity = '1';
+            card.style.transform = 'none';
+        }
 
         const img = document.createElement('img');
         img.className = 'movie-poster lazy';
@@ -335,7 +355,7 @@ class MovieWebsite {
 
         // Previous button
         if (this.currentPage > 1) {
-            const prevBtn = this.createPageButton('‹', this.currentPage - 1);
+            const prevBtn = this.createPageButton('â€¹', this.currentPage - 1);
             pagination.appendChild(prevBtn);
         }
 
@@ -373,7 +393,7 @@ class MovieWebsite {
 
         // Next button
         if (this.currentPage < totalPages) {
-            const nextBtn = this.createPageButton('›', this.currentPage + 1);
+            const nextBtn = this.createPageButton('â€º', this.currentPage + 1);
             pagination.appendChild(nextBtn);
         }
     }
@@ -466,7 +486,7 @@ class MovieWebsite {
         // Previous button
         if (this.adminCurrentPage > 1) {
             const prevBtn = document.createElement('button');
-            prevBtn.textContent = '‹';
+            prevBtn.textContent = 'â€¹';
             prevBtn.className = 'admin-page-btn';
             prevBtn.style.cssText = 'margin: 0 5px; padding: 5px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 3px; cursor: pointer;';
             prevBtn.onclick = () => {
@@ -485,7 +505,7 @@ class MovieWebsite {
         // Next button
         if (this.adminCurrentPage < totalPages) {
             const nextBtn = document.createElement('button');
-            nextBtn.textContent = '›';
+            nextBtn.textContent = 'â€º';
             nextBtn.className = 'admin-page-btn';
             nextBtn.style.cssText = 'margin: 0 5px; padding: 5px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 3px; cursor: pointer;';
             nextBtn.onclick = () => {
