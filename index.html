@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamNest</title>
+    <link href="style.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>StreamNest</h1>
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Search movies..." />
+                <button id="searchBtn">??</button>
+            </div>
+            <button id="adminBtn" class="admin-btn">Admin Panel</button>
+        </div>
+    </header>
+
+    <main class="container">
+        <div id="movieGrid" class="movie-grid"></div>
+        <div id="pagination" class="pagination"></div>
+        <div id="loading" class="loading">Loading...</div>
+    </main>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content login-modal">
+            <span class="close login-close">&times;</span>
+            <h2>Admin Login</h2>
+            <p class="access-warning">User access not allowed</p>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="adminPassword">Password:</label>
+                    <input type="password" id="adminPassword" required placeholder="Enter admin password">
+                </div>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Modal -->
+    <div id="adminModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Admin Panel - Add Movie</h2>
+            <form id="adminForm">
+                <div class="form-group">
+                    <label for="movieTitle">Movie Title:</label>
+                    <input type="text" id="movieTitle" required>
+                </div>
+                
+                <div class="input-method-toggle">
+                    <label>
+                        <input type="radio" name="inputMethod" value="url" checked>
+                        Use URLs (Recommended)
+                    </label>
+                    <label>
+                        <input type="radio" name="inputMethod" value="file">
+                        Upload Files
+                    </label>
+                </div>
+                
+                <!-- URL Input Method -->
+                <div id="urlInputs" class="input-section">
+                    <div class="form-group">
+                        <label for="bannerUrl">Banner Image URL:</label>
+                        <input type="url" id="bannerUrl" placeholder="https://example.com/banner.jpg">
+                        <small>Enter direct URL to movie poster/banner image</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="downloadUrl">Download URL:</label>
+                        <input type="url" id="downloadUrl" placeholder="https://example.com/movie.mp4">
+                        <small>Enter direct URL to movie file for download</small>
+                    </div>
+                </div>
+                
+                <!-- File Input Method -->
+                <div id="fileInputs" class="input-section" style="display: none;">
+                    <div class="form-group">
+                        <label for="movieBanner">Banner Image File:</label>
+                        <input type="file" id="movieBanner" accept="image/*">
+                    </div>
+                    <div class="form-group">
+                        <label for="movieFile">Movie File:</label>
+                        <input type="file" id="movieFile" accept="video/*">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="movieDescription">Description (optional):</label>
+                    <textarea id="movieDescription" rows="3" placeholder="Enter movie description..."></textarea>
+                </div>
+                <button type="submit">Add Movie</button>
+            </form>
+            
+            <div class="existing-movies">
+                <h3>Existing Movies</h3>
+                <div id="adminMovieList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamNest</title>
+    <link href="style.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>StreamNest</h1>
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Search movies..." />
+                <button id="searchBtn">??</button>
+            </div>
+            <button id="adminBtn" class="admin-btn">Admin Panel</button>
+        </div>
+    </header>
+
+    <main class="container">
+        <div id="movieGrid" class="movie-grid"></div>
+        <div id="pagination" class="pagination"></div>
+        <div id="loading" class="loading">Loading...</div>
+    </main>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content login-modal">
+            <span class="close login-close">&times;</span>
+            <h2>Admin Login</h2>
+            <p class="access-warning">User access not allowed</p>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="adminPassword">Password:</label>
+                    <input type="password" id="adminPassword" required placeholder="Enter admin password">
+                </div>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Modal -->
+    <div id="adminModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Admin Panel - Add Movie</h2>
+            <form id="adminForm">
+                <div class="form-group">
+                    <label for="movieTitle">Movie Title:</label>
+                    <input type="text" id="movieTitle" required>
+                </div>
+                
+                <div class="input-method-toggle">
+                    <label>
+                        <input type="radio" name="inputMethod" value="url" checked>
+                        Use URLs (Recommended)
+                    </label>
+                    <label>
+                        <input type="radio" name="inputMethod" value="file">
+                        Upload Files
+                    </label>
+                </div>
+                
+                <!-- URL Input Method -->
+                <div id="urlInputs" class="input-section">
+                    <div class="form-group">
+                        <label for="bannerUrl">Banner Image URL:</label>
+                        <input type="url" id="bannerUrl" placeholder="https://example.com/banner.jpg">
+                        <small>Enter direct URL to movie poster/banner image</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="downloadUrl">Download URL:</label>
+                        <input type="url" id="downloadUrl" placeholder="https://example.com/movie.mp4">
+                        <small>Enter direct URL to movie file for download</small>
+                    </div>
+                </div>
+                
+                <!-- File Input Method -->
+                <div id="fileInputs" class="input-section" style="display: none;">
+                    <div class="form-group">
+                        <label for="movieBanner">Banner Image File:</label>
+                        <input type="file" id="movieBanner" accept="image/*">
+                    </div>
+                    <div class="form-group">
+                        <label for="movieFile">Movie File:</label>
+                        <input type="file" id="movieFile" accept="video/*">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="movieDescription">Description (optional):</label>
+                    <textarea id="movieDescription" rows="3" placeholder="Enter movie description..."></textarea>
+                </div>
+                <button type="submit">Add Movie</button>
+            </form>
+            
+            <div class="existing-movies">
+                <h3>Existing Movies</h3>
+                <div id="adminMovieList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
