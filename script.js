@@ -144,10 +144,12 @@ class MovieWebsite {
         if (searchTerm === '') {
             this.filteredMovies = [...this.movies];
         } else {
-            this.filteredMovies = this.movies.filter(movie =>
-                movie.title.toLowerCase().includes(searchTerm) ||
-                movie.description.toLowerCase().includes(searchTerm)
-            );
+            // Optimized search with early exit
+            this.filteredMovies = this.movies.filter(movie => {
+                const titleMatch = movie.title.toLowerCase().includes(searchTerm);
+                const descMatch = movie.description.toLowerCase().includes(searchTerm);
+                return titleMatch || descMatch;
+            });
         }
 
         this.currentPage = 1;
@@ -161,43 +163,69 @@ class MovieWebsite {
 
         loading.style.display = 'block';
 
-        setTimeout(() => {
+        // Use requestAnimationFrame for smoother rendering
+        requestAnimationFrame(() => {
             const startIndex = (this.currentPage - 1) * this.moviesPerPage;
             const endIndex = startIndex + this.moviesPerPage;
             const moviesToShow = this.filteredMovies.slice(startIndex, endIndex);
 
-            movieGrid.innerHTML = '';
+            // Use DocumentFragment for better performance
+            const fragment = document.createDocumentFragment();
 
             if (moviesToShow.length === 0) {
-                movieGrid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; font-size: 1.2rem; color: rgba(255,255,255,0.7);">No movies found matching your search.</p>';
+                const noResults = document.createElement('p');
+                noResults.style.cssText = 'grid-column: 1/-1; text-align: center; font-size: 1.2rem; color: rgba(255,255,255,0.7);';
+                noResults.textContent = 'No movies found matching your search.';
+                fragment.appendChild(noResults);
             } else {
                 moviesToShow.forEach((movie, index) => {
                     const movieCard = this.createMovieCard(movie, index);
-                    movieGrid.appendChild(movieCard);
+                    fragment.appendChild(movieCard);
                 });
             }
 
+            movieGrid.innerHTML = '';
+            movieGrid.appendChild(fragment);
             loading.style.display = 'none';
-        }, 300);
+
+            // Initialize lazy loading for new images
+            this.initializeLazyLoading();
+        });
     }
 
     createMovieCard(movie, index) {
         const card = document.createElement('div');
         card.className = 'movie-card';
         card.setAttribute('data-movie-id', movie.id);
-        card.style.animationDelay = `${index * 0.1}s`;
+        card.style.animationDelay = `${Math.min(index * 0.05, 0.4)}s`; // Limit animation delay
 
-        card.innerHTML = `
-            <img src="${movie.bannerUrl}" alt="${movie.title}" class="movie-poster" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQ1MCIgdmlld0JveD0iMCAwIDMwMCA0NTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiBmaWxsPSIjMUExQTFBIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMjI1IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiNGRkZGRkYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPk5vIEltYWdlPC90ZXh0Pgo8L3N2Zz4K'" crossorigin="anonymous">
-            <div class="movie-info">
-                <div class="movie-title">${movie.title}</div>
-                <div class="movie-description">${movie.description}</div>
-            </div>
-        `;
+        const img = document.createElement('img');
+        img.className = 'movie-poster lazy';
+        img.setAttribute('data-src', movie.bannerUrl);
+        img.alt = movie.title;
+        img.loading = 'lazy';
+        img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQ1MCIgdmlld0JveD0iMCAwIDMwMCA0NTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiBmaWxsPSIjMjAyMDIwIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMjI1IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNBQUFBQUEiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkxvYWRpbmcuLi48L3RleHQ+Cjwvc3ZnPgo=';
+        
+        const movieInfo = document.createElement('div');
+        movieInfo.className = 'movie-info';
+        
+        const title = document.createElement('div');
+        title.className = 'movie-title';
+        title.textContent = movie.title;
+        
+        const description = document.createElement('div');
+        description.className = 'movie-description';
+        description.textContent = movie.description;
+        
+        movieInfo.appendChild(title);
+        movieInfo.appendChild(description);
+        card.appendChild(img);
+        card.appendChild(movieInfo);
 
+        // Use passive event listener for better performance
         card.addEventListener('click', () => {
             this.downloadMovie(movie);
-        });
+        }, { passive: true });
 
         return card;
     }
@@ -689,6 +717,37 @@ class MovieWebsite {
         }, 5000);
     }
 
+    initializeLazyLoading() {
+        if (this.imageObserver) {
+            this.imageObserver.disconnect();
+        }
+
+        this.imageObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    const src = img.getAttribute('data-src');
+                    if (src) {
+                        img.src = src;
+                        img.classList.remove('lazy');
+                        img.onerror = function() {
+                            this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQ1MCIgdmlld0JveD0iMCAwIDMwMCA0NTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiBmaWxsPSIjMUExQTFBIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMjI1IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiNGRkZGRkYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPk5vIEltYWdlPC90ZXh0Pgo8L3N2Zz4K';
+                        };
+                        this.imageObserver.unobserve(img);
+                    }
+                }
+            });
+        }, {
+            rootMargin: '50px 0px',
+            threshold: 0.01
+        });
+
+        // Observe all images with lazy class
+        document.querySelectorAll('img.lazy').forEach(img => {
+            this.imageObserver.observe(img);
+        });
+    }
+
     initializeDefaultMovies() {
         // Add some sample movies for demonstration
         const sampleMovies = [
@@ -731,19 +790,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Performance optimization: Lazy loading for images
 document.addEventListener('DOMContentLoaded', () => {
-    const imageObserver = new IntersectionObserver((entries, observer) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                const img = entry.target;
-                img.src = img.dataset.src;
-                img.classList.remove('lazy');
-                observer.unobserve(img);
-            }
-        });
-    });
-
-    // Observe all images with lazy class
-    document.querySelectorAll('img.lazy').forEach(img => {
-        imageObserver.observe(img);
-    });
+    window.movieWebsite.initializeLazyLoading();
 });
+
+// Add throttle utility for performance
+function throttle(func, limit) {
+    let inThrottle;
+    return function() {
+        const args = arguments;
+        const context = this;
+        if (!inThrottle) {
+            func.apply(context, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    }
+}
