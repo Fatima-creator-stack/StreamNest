@@ -13,7 +13,12 @@
             <h1>StreamNest</h1>
             <div class="search-container">
                 <input type="text" id="searchInput" placeholder="Search movies..." />
-                <button id="searchBtn">🔍</button>
+                <button id="searchBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </button>
             </div>
             <button id="adminBtn" class="admin-btn">Admin Panel</button>
         </div>
@@ -114,6 +119,27 @@
                 </div>
                 <small style="color: rgba(255,255,255,0.7); display: block; margin-top: 8px;">
                     Backups are automatically created before adding or deleting movies. Use "Restore" to undo recent changes.
+                </small>
+            </div>
+
+            <div class="debug-section" style="margin: 20px 0; padding: 15px; background: rgba(100,100,100,0.1); border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);">
+                <h3 style="margin-top: 0;">Debug Tools</h3>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button type="button" onclick="movieWebsite.refreshMovies(); alert('Movies refreshed!');" 
+                            style="background: linear-gradient(45deg, #6c757d, #495057); border: none; padding: 8px 15px; border-radius: 5px; color: white; cursor: pointer; font-size: 14px;">
+                        Refresh Movies
+                    </button>
+                    <button type="button" onclick="console.log('Total movies:', movieWebsite.movies.length); alert('Check console for details');" 
+                            style="background: linear-gradient(45deg, #17a2b8, #138496); border: none; padding: 8px 15px; border-radius: 5px; color: white; cursor: pointer; font-size: 14px;">
+                        Debug Info
+                    </button>
+                    <button type="button" onclick="localStorage.clear(); location.reload();" 
+                            style="background: linear-gradient(45deg, #ffc107, #e0a800); border: none; padding: 8px 15px; border-radius: 5px; color: black; cursor: pointer; font-size: 14px;">
+                        Clear All Data
+                    </button>
+                </div>
+                <small style="color: rgba(255,255,255,0.7); display: block;">
+                    Use these tools if movies aren't showing up properly. "Refresh Movies" reloads from storage, "Debug Info" shows current state in console.
                 </small>
             </div>
 
