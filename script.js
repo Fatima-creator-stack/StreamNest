@@ -1,7 +1,7 @@
 class MovieWebsite {
     constructor() {
         // Try to load from regular storage first, then chunks
-        this.movies = JSON.parse(localStorage.getItem('movies')) || this.loadMoviesFromChunks() || [];
+        this.loadMoviesData();
         this.currentPage = 1;
         this.moviesPerPage = 20;
         this.filteredMovies = [...this.movies];
@@ -10,6 +10,31 @@ class MovieWebsite {
         this.adminCurrentPage = 1;
 
         this.init();
+    }
+
+    loadMoviesData() {
+        try {
+            // First try regular storage
+            const regularData = localStorage.getItem('movies');
+            if (regularData) {
+                this.movies = JSON.parse(regularData);
+                console.log('Movies loaded from regular storage:', this.movies.length, 'movies');
+                return;
+            }
+        } catch (e) {
+            console.log('Failed to load from regular storage, trying chunks...');
+        }
+
+        // Try chunks if regular storage failed
+        const chunkedData = this.loadMoviesFromChunks();
+        if (chunkedData) {
+            this.movies = chunkedData;
+            return;
+        }
+
+        // Initialize empty if nothing found
+        this.movies = [];
+        console.log('No movies found, initialized empty array');
     }
 
     init() {
@@ -355,7 +380,7 @@ class MovieWebsite {
 
         // Previous button
         if (this.currentPage > 1) {
-            const prevBtn = this.createPageButton('â€¹', this.currentPage - 1);
+            const prevBtn = this.createPageButton('‹', this.currentPage - 1);
             pagination.appendChild(prevBtn);
         }
 
@@ -393,7 +418,7 @@ class MovieWebsite {
 
         // Next button
         if (this.currentPage < totalPages) {
-            const nextBtn = this.createPageButton('â€º', this.currentPage + 1);
+            const nextBtn = this.createPageButton('›', this.currentPage + 1);
             pagination.appendChild(nextBtn);
         }
     }
@@ -486,7 +511,7 @@ class MovieWebsite {
         // Previous button
         if (this.adminCurrentPage > 1) {
             const prevBtn = document.createElement('button');
-            prevBtn.textContent = 'â€¹';
+            prevBtn.textContent = '‹';
             prevBtn.className = 'admin-page-btn';
             prevBtn.style.cssText = 'margin: 0 5px; padding: 5px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 3px; cursor: pointer;';
             prevBtn.onclick = () => {
@@ -505,7 +530,7 @@ class MovieWebsite {
         // Next button
         if (this.adminCurrentPage < totalPages) {
             const nextBtn = document.createElement('button');
-            nextBtn.textContent = 'â€º';
+            nextBtn.textContent = '›';
             nextBtn.className = 'admin-page-btn';
             nextBtn.style.cssText = 'margin: 0 5px; padding: 5px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 3px; cursor: pointer;';
             nextBtn.onclick = () => {
@@ -529,6 +554,9 @@ class MovieWebsite {
 
     deleteMovie(movieId) {
         if (confirm('Are you sure you want to delete this movie?')) {
+            // Create backup before deletion
+            this.createBackup();
+            
             this.movies = this.movies.filter(movie => movie.id !== movieId);
             this.filteredMovies = this.filteredMovies.filter(movie => movie.id !== movieId);
             this.saveMovies();
@@ -539,32 +567,59 @@ class MovieWebsite {
                 this.adminCurrentPage = totalPages;
             }
 
+            // Force refresh all displays
             this.displayMovies();
             this.setupPagination();
             this.displayAdminMovies();
+            
+            // Clean up click counts for deleted movie
+            localStorage.removeItem(`clickCount_${movieId}`);
         }
+    }
+
+    // Add method to manually refresh movies (useful for debugging)
+    refreshMovies() {
+        this.loadMoviesData();
+        this.filteredMovies = [...this.movies];
+        this.currentPage = 1;
+        this.displayMovies();
+        this.setupPagination();
+        if (this.isAdminLoggedIn()) {
+            this.displayAdminMovies();
+        }
+        console.log('Movies refreshed:', this.movies.length, 'total movies');
     }
 
     saveMovies() {
         try {
-            // Compress and store movies data
+            // Clear any existing chunks first
+            this.clearMovieChunks();
+            
             const moviesData = JSON.stringify(this.movies);
+            
+            // Try to save normally first
             localStorage.setItem('movies', moviesData);
-
-            // Store backup in chunks if data is large
-            if (moviesData.length > 5000000) { // 5MB threshold
-                this.saveMoviesInChunks(moviesData);
-            }
+            console.log('Movies saved successfully:', this.movies.length, 'movies');
+            
         } catch (e) {
-            if (e.name === 'QuotaExceededError') {
-                // Try to save in chunks for unlimited storage capability
-                this.saveMoviesInChunks(JSON.stringify(this.movies));
-            }
+            console.log('Storage quota exceeded, saving in chunks...');
+            // Clear the failed attempt
+            localStorage.removeItem('movies');
+            // Save in chunks for unlimited storage capability
+            this.saveMoviesInChunks(JSON.stringify(this.movies));
         }
     }
 
+    clearMovieChunks() {
+        const chunkCount = parseInt(localStorage.getItem('movieChunks') || '0');
+        for (let i = 0; i < chunkCount; i++) {
+            localStorage.removeItem(`movieChunk_${i}`);
+        }
+        localStorage.removeItem('movieChunks');
+    }
+
     saveMoviesInChunks(data) {
-        const chunkSize = 1000000; // 1MB chunks
+        const chunkSize = 500000; // 500KB chunks for better compatibility
         const chunks = [];
 
         for (let i = 0; i < data.length; i += chunkSize) {
@@ -572,12 +627,17 @@ class MovieWebsite {
         }
 
         try {
+            // Clear old chunks first
+            this.clearMovieChunks();
+            
             localStorage.setItem('movieChunks', chunks.length.toString());
             chunks.forEach((chunk, index) => {
                 localStorage.setItem(`movieChunk_${index}`, chunk);
             });
+            console.log('Movies saved in chunks:', chunks.length, 'chunks');
         } catch (e) {
-            alert('Storage limit reached. Consider clearing old data or using external storage.');
+            alert('Storage limit reached. Please clear some browser data and try again.');
+            console.error('Chunk save failed:', e);
         }
     }
 
@@ -587,12 +647,20 @@ class MovieWebsite {
 
         let data = '';
         for (let i = 0; i < chunkCount; i++) {
-            data += localStorage.getItem(`movieChunk_${i}`) || '';
+            const chunk = localStorage.getItem(`movieChunk_${i}`);
+            if (chunk === null) {
+                console.error('Missing chunk:', i);
+                return null;
+            }
+            data += chunk;
         }
 
         try {
-            return JSON.parse(data);
+            const movies = JSON.parse(data);
+            console.log('Movies loaded from chunks:', movies.length, 'movies');
+            return movies;
         } catch (e) {
+            console.error('Failed to parse chunked data:', e);
             return null;
         }
     }
@@ -696,10 +764,27 @@ class MovieWebsite {
 
         this.movies.push(newMovie);
         this.filteredMovies = [...this.movies];
+        
+        // Save movies and ensure they're persisted
         this.saveMovies();
+        
+        // Force refresh of all displays
+        this.currentPage = 1; // Reset to first page to show new movie
         this.displayMovies();
         this.setupPagination();
         this.displayAdminMovies();
+        
+        // Verify the movie was saved by reloading
+        setTimeout(() => {
+            this.loadMoviesData();
+            this.filteredMovies = [...this.movies];
+            if (this.movies.find(m => m.id === newMovie.id)) {
+                console.log('Movie successfully saved and verified');
+            } else {
+                console.error('Movie save verification failed');
+                alert('Warning: Movie may not have been saved properly. Please check if it appears on refresh.');
+            }
+        }, 100);
 
         // Reset form
         document.getElementById('adminForm').reset();
