@@ -1,3 +1,4 @@
+// Supabase Integration + Updated MovieWebsite
 
 const SUPABASE_URL = 'https://bkoxobkfrbwjotydwxzf.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJrb3hvYmtmcmJ3am90eWR3eHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAzMTQzOTksImV4cCI6MjA2NTg5MDM5OX0.oTZliwHNoV6AufydmNU4sv1hVa3LDkCW1S5uk75iqD0';
@@ -94,6 +95,7 @@ class MovieWebsite {
   }
 }
 
+// Initialize on load
 document.addEventListener('DOMContentLoaded', () => {
   window.movieWebsite = new MovieWebsite();
 });
