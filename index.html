@@ -2,32 +2,154 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StreamNest</title>
     <link href="style.css" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script defer src="script.js"></script>
 </head>
 <body>
     <header>
         <div class="container">
             <h1>StreamNest</h1>
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Search movies..." />
+                <button id="searchBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </button>
+            </div>
             <button id="adminBtn" class="admin-btn">Admin Panel</button>
         </div>
     </header>
 
     <main class="container">
         <div id="movieGrid" class="movie-grid"></div>
-
-        <form id="adminForm" style="margin-top: 40px;">
-            <h2 style="color: white;">Add Movie</h2>
-            <input type="text" id="movieTitle" placeholder="Movie Title" required />
-            <input type="url" id="bannerUrl" placeholder="Banner Image URL" required />
-            <input type="url" id="downloadUrl" placeholder="Download URL" required />
-            <textarea id="movieDescription" placeholder="Description (optional)"></textarea>
-            <button type="submit">Add Movie</button>
-        </form>
+        <div id="pagination" class="pagination"></div>
+        <div id="loading" class="loading">Loading...</div>
     </main>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content login-modal">
+            <span class="close login-close">&times;</span>
+            <h2>Admin Login</h2>
+            <p class="access-warning">User access not allowed</p>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="adminPassword">Password:</label>
+                    <input type="password" id="adminPassword" required placeholder="Enter admin password">
+                </div>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Modal -->
+    <div id="adminModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Admin Panel - Add Movie</h2>
+            <form id="adminForm">
+                <div class="form-group">
+                    <label for="movieTitle">Movie Title:</label>
+                    <input type="text" id="movieTitle" required>
+                </div>
+                
+                <div class="input-method-toggle">
+                    <label>
+                        <input type="radio" name="inputMethod" value="url" checked>
+                        Use URLs (Recommended)
+                    </label>
+                    <label>
+                        <input type="radio" name="inputMethod" value="file">
+                        Upload Files
+                    </label>
+                </div>
+                
+                <!-- URL Input Method -->
+                <div id="urlInputs" class="input-section">
+                    <div class="form-group">
+                        <label for="bannerUrl">Banner Image URL:</label>
+                        <input type="url" id="bannerUrl" placeholder="https://example.com/banner.jpg">
+                        <small>Enter direct URL to movie poster/banner image</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="downloadUrl">Download URL:</label>
+                        <input type="url" id="downloadUrl" placeholder="https://example.com/movie.mp4">
+                        <small>Enter direct URL to movie file for download</small>
+                    </div>
+                </div>
+                
+                <!-- File Input Method -->
+                <div id="fileInputs" class="input-section" style="display: none;">
+                    <div class="form-group">
+                        <label for="movieBanner">Banner Image File:</label>
+                        <input type="file" id="movieBanner" accept="image/*">
+                    </div>
+                    <div class="form-group">
+                        <label for="movieFile">Movie File:</label>
+                        <input type="file" id="movieFile" accept="video/*">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="movieDescription">Description (optional):</label>
+                    <textarea id="movieDescription" rows="3" placeholder="Enter movie description..."></textarea>
+                </div>
+                <button type="submit">Add Movie</button>
+            </form>
+            
+            <div class="backup-section" style="margin: 20px 0; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);">
+                <h3 style="margin-top: 0;">Backup Management</h3>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" onclick="movieWebsite.createBackup(); alert('Backup created successfully!');" 
+                            style="background: linear-gradient(45deg, #007bff, #0056b3); border: none; padding: 8px 15px; border-radius: 5px; color: white; cursor: pointer; font-size: 14px;">
+                        Create Backup
+                    </button>
+                    <button type="button" onclick="movieWebsite.showRestoreOption();" 
+                            style="background: linear-gradient(45deg, #28a745, #1e7e34); border: none; padding: 8px 15px; border-radius: 5px; color: white; cursor: pointer; font-size: 14px;">
+                        Restore from Backup
+                    </button>
+                    <button type="button" onclick="if(confirm('This will permanently delete the backup. Continue?')) { localStorage.removeItem('moviesBackup'); alert('Backup deleted!'); }" 
+                            style="background: linear-gradient(45deg, #dc3545, #c82333); border: none; padding: 8px 15px; border-radius: 5px; color: white; cursor: pointer; font-size: 14px;">
+                        Delete Backup
+                    </button>
+                </div>
+                <small style="color: rgba(255,255,255,0.7); display: block; margin-top: 8px;">
+                    Backups are automatically created before adding or deleting movies. Use "Restore" to undo recent changes.
+                </small>
+            </div>
+
+            <div class="debug-section" style="margin: 20px 0; padding: 15px; background: rgba(100,100,100,0.1); border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);">
+                <h3 style="margin-top: 0;">Debug Tools</h3>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <button type="button" onclick="movieWebsite.refreshMovies(); alert('Movies refreshed!');" 
+                            style="background: linear-gradient(45deg, #6c757d, #495057); border: none; padding: 8px 15px; border-radius: 5px; color: white; cursor: pointer; font-size: 14px;">
+                        Refresh Movies
+                    </button>
+                    <button type="button" onclick="console.log('Total movies:', movieWebsite.movies.length); alert('Check console for details');" 
+                            style="background: linear-gradient(45deg, #17a2b8, #138496); border: none; padding: 8px 15px; border-radius: 5px; color: white; cursor: pointer; font-size: 14px;">
+                        Debug Info
+                    </button>
+                    <button type="button" onclick="localStorage.clear(); location.reload();" 
+                            style="background: linear-gradient(45deg, #ffc107, #e0a800); border: none; padding: 8px 15px; border-radius: 5px; color: black; cursor: pointer; font-size: 14px;">
+                        Clear All Data
+                    </button>
+                </div>
+                <small style="color: rgba(255,255,255,0.7); display: block;">
+                    Use these tools if movies aren't showing up properly. "Refresh Movies" reloads from storage, "Debug Info" shows current state in console.
+                </small>
+            </div>
+
+            <div class="existing-movies">
+                <h3>Existing Movies</h3>
+                <div id="adminMovieList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
